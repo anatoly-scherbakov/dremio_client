@@ -35,24 +35,26 @@ _DRIVER = None
 
 
 def _get_driver_name():
-    global _DRIVER
     if "linux" in sys.platform:
         if sys.maxsize > 2 ** 32:
-            _DRIVER = _LINUX64_DRIVER
+            return _LINUX64_DRIVER
         else:
-            _DRIVER = _LINUX32_DRIVER
+            return _LINUX32_DRIVER
+
     if "darwin" in sys.platform:
-        _DRIVER = _OSX_DRIVER
+        return _OSX_DRIVER
+
     if "win" in sys.platform:
-        _DRIVER = _WINDOWS_DRIVER
-    logging.debug("Using %s as the odbc driver", _DRIVER)
+        return _WINDOWS_DRIVER
+
+    return _DRIVER
 
 
 try:
     import pyodbc
     import pandas
 
-    def connect(hostname="localhost", port=31010, username="dremio", password="dremio123"):
+    def connect(hostname="localhost", port=31010, username="dremio", password="dremio123", driver=None):
         """
         Connect to and authenticate against Dremio's odbc server. Auth is skipped if username is None
 
@@ -60,12 +62,27 @@ try:
         :param port: Dremio coordinator port
         :param username: Username on Dremio
         :param password: Password on Dremio
+        :param driver: ODBC driver name or file path
         :return: arrow flight client
         """
+        if driver is None:
+            driver = _get_driver_name()
+
+        logging.debug("Using %s as the odbc driver", driver)
+
+        connection_string = (
+            "Driver={driver};ConnectionType=Direct;HOST={hostname};"
+            + "PORT={port};AuthenticationType=Plain;UID={username};PWD={password}"
+        ).format(
+            driver=driver,
+            hostname=hostname,
+            port=port,
+            username=username,
+            password=password,
+        )
+
         c = pyodbc.connect(
-            "Driver={};ConnectionType=Direct;HOST={};PORT={};AuthenticationType=Plain;UID={};PWD={}".format(
-                _DRIVER, hostname, port, username, password
-            ),
+            connection_string,
             autocommit=True,
         )
 
